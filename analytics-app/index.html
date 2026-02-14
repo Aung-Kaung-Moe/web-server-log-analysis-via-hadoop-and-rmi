@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Analytics</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; }
+        .row { display:flex; gap:12px; align-items:center; margin-bottom: 14px; flex-wrap: wrap; }
+        input { padding: 8px; width: 170px; }
+        button { padding: 8px 12px; cursor: pointer; }
+        table { border-collapse: collapse; width: 900px; max-width: 100%; margin-bottom: 30px; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { text-align: left; }
+        .muted { color:#666; font-size: 13px; }
+        h2 { margin-top: 28px; }
+
+        /* cards */
+        .cards { display:flex; gap:12px; flex-wrap:wrap; margin: 12px 0 18px; }
+        .card { border:1px solid #ddd; border-radius:10px; padding:12px 14px; min-width:220px; }
+        .card .label { color:#666; font-size:13px; }
+        .card .value { font-size:22px; margin-top:6px; font-weight:700; }
+    </style>
+</head>
+<body>
+
+<h2>Analytics Dashboard</h2>
+<div class="muted">
+    Data source (HDFS): <code>/analytics/*/date=YYYY-MM-DD/part-00000</code>
+</div>
+
+<div class="row">
+    <label>Date:</label>
+    <input id="date" value="2026-02-08"/>
+    <label>Limit:</label>
+    <input id="limit" value="20"/>
+    <button onclick="loadAll()">Load All</button>
+    <span id="status" class="muted"></span>
+</div>
+
+<div class="cards">
+    <div class="card">
+        <div class="label">Most active bucket</div>
+        <div class="value" id="bestBucket">-</div>
+    </div>
+    <div class="card">
+        <div class="label">Requests in that bucket</div>
+        <div class="value" id="bestCount">-</div>
+    </div>
+</div>
+
+<h3>Top Routes</h3>
+<div class="muted">API: <code>/api/top_routes?date=YYYY-MM-DD&limit=20</code></div>
+<table>
+    <thead><tr><th>Route</th><th>Count</th></tr></thead>
+    <tbody id="tbody_routes"></tbody>
+</table>
+
+<script>
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      const data = await res.json();
+      return { res, data };
+    }
+
+    function showError(tbody, data) {
+      tbody.innerHTML = `<tr><td colspan="2"><pre>${JSON.stringify(data, null, 2)}</pre></td></tr>`;
+    }
+
+    function escapeHtml(s) {
+      return (s ?? "").toString()
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function setBestBucketFromItems(items) {
+      // items expected: [{bucket:"night", count:18}, ...]
+      if (!items || items.length === 0) {
+        document.getElementById("bestBucket").textContent = "-";
+        document.getElementById("bestCount").textContent = "-";
+        return;
+      }
+      const winner = items.reduce((a,b)=> (b.count > a.count ? b : a), items[0]);
+      document.getElementById("bestBucket").textContent = winner.bucket;
+      document.getElementById("bestCount").textContent = winner.count;
+    }
+
+    async function loadAll() {
+      const date = document.getElementById("date").value.trim();
+      const limit = document.getElementById("limit").value.trim() || "20";
+      const status = document.getElementById("status");
+      status.textContent = "loading...";
+
+      // clear table
+      document.getElementById("tbody_routes").innerHTML = "";
+
+      // 1) busiest_time (ONLY for the two summary cards)
+      {
+        const { res, data } = await fetchJson(`/api/busiest_time?date=${encodeURIComponent(date)}`);
+        if (!res.ok) { status.textContent = "error"; return; }
+        setBestBucketFromItems(data.items);
+      }
+
+      // 2) top routes (table)
+      {
+        const { res, data } = await fetchJson(`/api/top_routes?date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`);
+        const tbody = document.getElementById("tbody_routes");
+        if (!res.ok) { status.textContent = "error"; return showError(tbody, data); }
+
+        for (const it of data.items) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${escapeHtml(it.route)}</td><td>${it.count}</td>`;
+          tbody.appendChild(tr);
+        }
+      }
+
+      status.textContent = "loaded ✅";
+    }
+
+    loadAll();
+</script>
+
+</body>
+</html>

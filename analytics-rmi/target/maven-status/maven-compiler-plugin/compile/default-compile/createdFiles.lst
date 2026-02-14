@@ -1,0 +1,5 @@
+com\example\analyticsrmi\HdfsResultReader.class
+com\example\analyticsrmi\RmiServerMain.class
+com\example\analyticsrmi\AnalyticsService.class
+com\example\analyticsrmi\ResultRow.class
+com\example\analyticsrmi\AnalyticsServiceImpl.class

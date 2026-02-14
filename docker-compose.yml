@@ -1,0 +1,177 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - TZ=Asia/Yangon
+      - CLUSTER_NAME=shopping
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - HDFS_CONF_dfs_replication=3
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+      - HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname_check=false
+    ports:
+      - "9871:9870"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - HDFS_CONF_dfs_datanode_hostname=datanode
+      - SERVICE_PRECONDITION=namenode:8020
+      - TZ=Asia/Yangon
+    depends_on:
+      - namenode
+    volumes:
+      - datanode1:/hadoop/dfs/data
+    ports:
+      - "9864:9864"
+
+  datanode2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SERVICE_PRECONDITION=namenode:8020
+      - HDFS_CONF_dfs_datanode_hostname=datanode2
+      - TZ=Asia/Yangon
+    depends_on:
+      - namenode
+    volumes:
+      - datanode2:/hadoop/dfs/data
+    ports:
+      - "9865:9864"
+
+  datanode3:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SERVICE_PRECONDITION=namenode:8020
+      - HDFS_CONF_dfs_datanode_hostname=datanode3
+      - TZ=Asia/Yangon
+    depends_on:
+      - namenode
+    volumes:
+      - datanode3:/hadoop/dfs/data
+    ports:
+      - "9866:9864"
+
+  hadoop-client:
+    build: ./hadoop-client
+    environment:
+      - TZ=Asia/Yangon
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+    depends_on:
+      - namenode
+    volumes:
+      - ./hadoop-job:/job
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    command: [ "bash", "-c", "cat" ]
+
+  backend1:
+    build: ./shopping-backend
+    environment:
+      JWT_SECRET: "ZSAaeFbUvgBuL5i1ccDje3UMWqjbSq/ePrc0iJ7M6+MNundzdqEHIMdOac299LL4"
+      JWT_SECRET_IS_BASE64: "true"
+      JWT_EXPIRATION_MS: "86400000"
+      TZ: "Asia/Yangon"
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Yangon"
+      app.accesslog.path: "/app/logs/access.log"
+      analytics.rmi.host: "analytics-rmi"
+      analytics.rmi.port: "1099"
+    volumes:
+      - logs_backend1:/app/logs
+    depends_on:
+      - namenode
+      - datanode
+    ports:
+      - "8081:8080"
+
+  backend2:
+    build: ./shopping-backend
+    environment:
+      - app.accesslog.path=/app/logs/access.log
+      - analytics.rmi.host=analytics-rmi
+      - analytics.rmi.port=1099
+    volumes:
+      - logs_backend2:/app/logs
+    depends_on:
+      - namenode
+      - datanode
+    ports:
+      - "8082:8080"
+
+  uploader1:
+    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+    environment:
+      - TZ=Asia/Yangon
+      - LOG_FILE=/logs/access.log
+      - HDFS_BASE_DIR=/logs/shopping-backend
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - BACKEND_ID=backend1
+      - WEBHDFS_HOST=namenode
+      - WEBHDFS_PORT=9870
+    volumes:
+      - logs_backend1:/logs
+      - ./log-uploader/uploader.sh:/app/uploader.sh:ro
+    depends_on:
+      - namenode
+      - datanode
+      - datanode2
+      - datanode3
+    command: [ "bash", "/app/uploader.sh" ]
+    restart: unless-stopped
+
+  uploader2:
+    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - LOG_FILE=/logs/access.log
+      - HDFS_CONF_dfs_replication=3
+      - HDFS_BASE_DIR=/logs/shopping-backend
+      - BACKEND_ID=backend2
+    volumes:
+      - logs_backend2:/logs
+      - ./log-uploader/uploader-hdfs.sh:/app/uploader-hdfs.sh:ro
+    depends_on:
+      - namenode
+      - datanode
+      - datanode2
+      - datanode3
+    command: ["bash", "/app/uploader-hdfs.sh"]
+
+  analytics-rmi:
+    build: ./analytics-rmi
+    depends_on:
+      - namenode
+      - datanode
+      - datanode2
+      - datanode3
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - TZ=Asia/Yangon
+      - HDFS_CONF_dfs_replication=3
+      - RMI_PORT=1099
+      - JAVA_TOOL_OPTIONS=-Djava.rmi.server.hostname=analytics-rmi
+    ports:
+      - "1099:1099"
+      - "2001:2001"
+
+  analytics-app:
+    build: ./analytics-app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - namenode
+      - datanode
+    environment:
+      - TZ=Asia/Yangon
+
+volumes:
+  namenode:
+  datanode1:
+  datanode2:
+  datanode3:
+  logs_backend1:
+  logs_backend2:

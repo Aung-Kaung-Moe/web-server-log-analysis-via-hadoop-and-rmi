@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Analytics</title>
+</head>
+<body>
+<h2>Top Accessed Endpoints</h2>
+
+<label>Date: <input id="date" value="2026-02-07"/></label>
+<label>Limit: <input id="limit" type="number" value="10"/></label>
+<button onclick="loadData()">Load</button>
+
+<pre id="out"></pre>
+
+<script>
+    async function loadData(){
+      const date = document.getElementById('date').value.trim();
+      const limit = document.getElementById('limit').value.trim();
+      const out = document.getElementById('out');
+      out.textContent = "Loading...";
+
+      const res = await fetch(`/analytics/top-endpoints?date=${encodeURIComponent(date)}&limit=${encodeURIComponent(limit)}`);
+      out.textContent = await res.text();
+    }
+</script>
+</body>
+</html>
